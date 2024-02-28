@@ -1,39 +1,62 @@
 .model tiny
-.code
 .286
+.code
 org 100h
 
 locals @@
 
-MAX_PASSWORD_LEN    equ 255
+MAX_PASSWORD_LEN    equ 8d
 CORRECT_PASSWORD	equ 22a1h
+END_STR				equ 0dh
+
 
 Start:
 		jmp Main
+		
+StringCorrect   db 10d, 'The password is correct. Access is allowed.', 03h, 03h, 03h, '$'
+StringIncorrect db 10d, 'The password is incorrect. Access is denied.$'
+Buffer          db MAX_PASSWORD_LEN dup (?)
 
+;----------------------------------------------------
+Main:
+		call ReadString
+		call GetHash
+
+		cmp bx, CORRECT_PASSWORD
+		je @@cor
+			mov dx, offset StringIncorrect
+			jmp @@continue
+
+		@@cor:
+			mov dx, offset StringCorrect
+
+		@@continue:
+
+		call PrintString
+		call ExitProg
 ;----------------------------------------------------
 ; Generate hash of string
 ; Entry:	
 ; Assumes:
-; Destr:	ax, bx, si, cx
+; Destr:	ax, bx, si
 
 GetHash		proc
 
 			mov bx, 5381d
-			mov cl, LenPas
-			xor ch, ch			; ch = 0
 			xor ah, ah			; ah = 0
 
 			mov si, offset Buffer
-			add si, 2d
-			
+			mov al, [si]
+
 			@@loop1:
 				shl bx, 5d 
-				mov al, [si]
 				add bx, ax
-				inc si
 
-				loop @@loop1
+				inc si
+				mov al, [si]
+
+				cmp al, END_STR
+				jne @@loop1
 
 			ret
 			endp
@@ -41,27 +64,24 @@ GetHash		proc
 ; Read string from standart output
 ; Entry:   
 ; Assumes:
-; Destr:	ax, dx, si
+; Destr:	ax, si
 ReadString	proc
 
-			mov ah, 0ah 
-			mov al, MAX_PASSWORD_LEN
-			mov [Buffer], al
-			mov [Buffer + 1], 0
+			xor al, al 				; al = 0
+			mov ah, 01h 
+			mov si, offset Buffer
+			
+			@@loop1:
+				int 21h
+				cmp al, END_STR
+				je @@continue
 
-            mov dx, offset Buffer
-			int 21h
+				mov byte ptr [si], al
+				inc si
+				jmp @@loop1
 
-			inc dx
-			mov si, dx
-			mov al, [si]
-			mov LenPas, al
-			inc dx
-
-			xor ah, ah				; ah = 0
-			add dx, ax
-			mov si, dx
-			mov byte ptr [si], '$'
+			@@continue:
+				mov byte ptr [si], al
 
 			ret
 			endp
@@ -89,34 +109,7 @@ ExitProg	proc
 			mov ax,  4c00h
 			int 21h
 
-			ret
 			endp
 ;-------------------------------------------------
-Main:
-		call ReadString
-
-		mov dx, offset Buffer
-		add dx, 2d
-		call PrintString
-
-		call GetHash
-
-		cmp bx, CORRECT_PASSWORD
-		je @@cor
-			mov dx, offset StringIncorrect
-			jmp @@continue
-
-		@@cor:
-			mov dx, offset StringCorrect
-
-		@@continue:
-
-		call PrintString
-		call ExitProg
-
-StringCorrect   db 10d, 'The password is correct. Access is allowed.', 03h, 03h, 03h, '$'
-StringIncorrect db 10d, 'The password is incorrect. Access is denied.$'
-Buffer          db MAX_PASSWORD_LEN dup (?)
-LenPas         	db 0
 
 end    		Start
